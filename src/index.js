@@ -1,13 +1,7 @@
 const express = require('express');
 const http = require('http');
-const socketIo = require('socket.io');
 const gphoto2 = require('gphoto2');
-const { Readable } = require('stream');
 const cors = require('cors');
-const path = require('path'); 
-const fs = require('fs');
-const { spawn } = require('child_process');
-
 const app = express();
 const corsOptions = {
   origin: '*', // Mengizinkan semua origin
@@ -19,12 +13,6 @@ app.use(cors(corsOptions));
 app.use(express.json());
 
 const server = http.createServer(app);
-const io = socketIo(server, {
-  cors: {
-    origin: '*', // Mengizinkan semua origin untuk WebSocket
-    methods: ['GET', 'POST'], // Metode HTTP yang diizinkan
-  },
-});
 
 const GPhoto = new gphoto2.GPhoto2();
 
@@ -99,62 +87,6 @@ app.get('/capture', (req, res) => {
     res.send(data);
   });
 });
-
-
-io.on('connection', (socket) => {
-  let isLiveViewActive = false;
-  socket.on('start-live-view', async () => {
-    if (!camera) {
-      socket.emit('error', 'Tidak ada kamera yang terdeteksi');
-      return;
-    }
-
-    console.log('Memulai live view...');
-    if (isLiveViewActive) {
-      socket.emit('info', 'Live view sudah berjalan');
-      return;
-    }
-
-    isLiveViewActive = true;
-
-    while (isLiveViewActive) {
-      try {
-        const file = await new Promise((resolve, reject) => {
-          camera.takePicture({ download: true }, (err, data) => {
-            if (err) reject(err);
-            else resolve(data);
-          });
-        });
-
-        console.log('jembud');
-        socket.emit('live-view-data', file.toString('base64'));
-        
-        await new Promise(resolve => setTimeout(resolve, 100));  // Delay 100ms
-      } catch (error) {
-        console.error('Live view error:', error);
-        socket.emit('error', 'Gagal mengambil gambar');
-        isLiveViewActive = false;
-      }
-    }
-
-    socket.emit('info', 'Live view dimulai');
-  });
-
-  const stopLiveView = () => {
-    isLiveViewActive = false;
-    socket.emit('info', 'Live view dihentikan');
-  };
-
-  socket.on('stop-live-view', stopLiveView);
-
-  socket.on('disconnect', () => {
-    console.log('Client terputus');
-    stopLiveView();
-  });
-
-});
-
-
 const port = 8080;
 server.listen(port, '0.0.0.0', () => {
   console.log(`Server berjalan di http://localhost:${port}`);
